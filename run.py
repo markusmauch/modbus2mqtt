@@ -73,7 +73,7 @@ def subscribe_mqtt_topics():
     for device in devices:
         for component in device.components:
             if component.access_mode == "read-write":
-                topic = f"{device.topic}/{component.type}/{device.name}/{component.topic}/state"
+                topic = f"{device.topic}/{component.type}/{device.unique_id}/{component.unique_id}/state"
                 CONSOLE.info(f"Subscribing to topic '{topic}'")
                 mqtt_client.subscribe(topic, properties=None)
 
@@ -85,7 +85,7 @@ def start_polling():
                 read_and_publish,
                 device.host,
                 component.modbus_address,
-                f"{device.topic}/{component.type}/{device.name}/{component.topic}/state",
+                f"{device.topic}/{component.type}/{device.unique_id}/{component.unique_id}/state",
                 component.scale,
                 component.precision
             )
@@ -103,11 +103,11 @@ def on_message_mqtt(client, userdata, message):
         for device in devices:
             for component in device.components:
                 if component.access_mode == "read-write":
-                    topic = f"{device.topic}/{component.type}/{device.name}/{component.topic}/config"
+                    topic = f"{device.topic}/{component.type}/{device.unique_id}/{component.unique_id}/state"
                     if topic == message.topic:
                         value = int(message.payload.decode("utf-8"))
                         params = parse_topic(message.topic)
-                        write(component.host, component.modbus_address, value)
+                        write(device.host, component.modbus_address, value)
 
 def parse_topic(topic):
     pattern = r"^(?P<device_topic>[^/]+)/(?P<component_type>[^/]+)/(?P<device_name>[^/]+)/(?P<component_topic>[^/]+)/state$"
@@ -157,10 +157,10 @@ def announce_sensors():
         for component in device.components:
             if component.access_mode == "read":
                 announce_sensor(
-                    topic=f"{device.topic}/{component.type}/{device.unique_id}/{component.topic}/config",
+                    topic=f"{device.topic}/{component.type}/{device.unique_id}/{component.unique_id}/config",
                     name=f"{device.unique_id}_{component.unique_id}",
                     unique_id=f"{device.name} {component.name}",
-                    state_topic=f"{device.topic}/{component.type}/{device.name}/{component.topic}/state",
+                    state_topic=f"{device.topic}/{component.type}/{device.unique_id}/{component.unique_id}/state",
                     value_template=None,
                     device_class=component.device_class,
                     state_class=component.state_class,

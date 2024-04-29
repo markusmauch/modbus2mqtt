@@ -11,11 +11,10 @@ class MQTTConfig:
         return cls(**yaml_data)
 
 class Component:
-    def __init__(self, type, name, unique_id, topic=None, device_class=None, state_class=None, unit_of_measurement=None, access_mode=None, modbus_address=None, poll_interval=60, scale=1, precision=1):
+    def __init__(self, type, name, unique_id, device_class=None, state_class=None, unit_of_measurement=None, access_mode=None, modbus_address=None, poll_interval=60, scale=1, precision=1):
         self.type = type
         self.unique_id = unique_id
         self.name = name
-        self.topic = topic
         self.device_class = device_class
         self.state_class = state_class
         self.unit_of_measurement = unit_of_measurement

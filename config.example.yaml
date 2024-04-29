@@ -1,7 +1,7 @@
 mqtt_config:
   host: "mqtt://homeassistant.local:1883"
   username: "pi"
-  password: "foobar"
+  password: ""
 devices:
   - name: "Powerbox"
     unique_id: "powerbox"
@@ -12,7 +12,6 @@ devices:
       - type: sensor
         name: "Raumtemperatur"
         unique_id: "raumtemperatur"
-        topic: "raumtemperatur"
         device_class: "temperature"
         state_class: "Measurement"
         unit_of_measurement: "°C"
@@ -24,7 +23,6 @@ devices:
       - type: sensor
         name: "Aussentemperatur"
         unique_id: "aussentemperatur"
-        topic: "aussentemperatur"
         device_class: "temperature"
         state_class: "Measurement"
         unit_of_measurement: "°C"
@@ -36,7 +34,6 @@ devices:
       - type: sensor
         name: "Luftfeuchtigkeit"
         unique_id: "luftfeuchtigkeit"
-        topic: "luftfeuchtigkeit"
         device_class: "humidity"
         state_class: "Measurement"
         unit_of_measurement: "%"
@@ -46,7 +43,6 @@ devices:
       - type: sensor
         name: "Betriebsart"
         unique_id: "betriebsart"
-        topic: "betriebsart"
         state_class: "Measurement"
         access_mode: "read-write"
         modbus_address: 550
@@ -56,7 +52,6 @@ devices:
       - type: sensor
         name: "Luftungsstufe"
         unique_id: "luftungsstufe"
-        topic: "luftungsstufe"
         access_mode: "read-write"
         modbus_address: 554
         poll_interval: 10
@@ -65,7 +60,6 @@ devices:
       - type: binary_sensor
         name: "Stossluftung"
         unique_id: "stossluftung"
-        topic: "stossluftung"
         access_mode: "read-write"
         modbus_address: 551
         poll_interval: 10
@@ -74,7 +68,6 @@ devices:
       - type: binary_sensor
         name: "Einschlaffunktion"
         unique_id: "einschlaffunktion"
-        topic: "einschlaffunktion"
         access_mode: "read-write"
         modbus_address: 559
         poll_interval: 10

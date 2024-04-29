@@ -1,0 +1,53 @@
+mqtt_config:
+  host: "mqtt://homeassistant.local:1883"
+  username: "pi"
+  password: ""
+devices:
+  - name: "powerbox"
+    topic: "homeassistant"
+    components:
+      - type: sensor
+        unique_id: "raumtemperatur"
+        topic: "raumtemperatur"
+        device_class: "temperature"
+        state_class: "Measurement"
+        unit_of_measurement: "°C"
+        access_mode: "read"
+        modbus_address: 700
+      - type: sensor
+        unique_id: "aussentemperatur"
+        topic: "aussentemperatur"
+        device_class: "temperature"
+        state_class: "Measurement"
+        unit_of_measurement: "°C"
+        access_mode: "read"
+        modbus_address: 703
+      - type: sensor
+        unique_id: "luftfeuchtigkeit"
+        topic: "luftfeuchtigkeit"
+        device_class: "humidity"
+        state_class: "Measurement"
+        unit_of_measurement: "%"
+        access_mode: "read"
+        modbus_address: 750
+      - type: sensor
+        unique_id: "betriebsart"
+        topic: "betriebsart"
+        state_class: "Measurement"
+        access_mode: "read-write"
+        modbus_address: 550
+      - type: sensor
+        unique_id: "luftungsstufe"
+        topic: "luftungsstufe"
+        access_mode: "read-write"
+        modbus_address: 554
+      - type: binary_sensor
+        unique_id: "stossluftung"
+        topic: "stossluftung"
+        access_mode: "read-write"
+        modbus_address: 551
+      - type: binary_sensor
+        unique_id: "einschlaffunktion"
+        topic: "einschlaffunktion"
+        access_mode: "read-write"
+        modbus_address: 559        

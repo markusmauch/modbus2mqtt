@@ -1,3 +1,3 @@
 ```
-pip install schedule pymodbus paho-mqtt
+pip install schedule pymodbus paho-mqtt pyyaml
 ```

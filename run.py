@@ -26,9 +26,6 @@ CONSOLE: logging.Logger = logging.getLogger("console")
 CONSOLE.addHandler(logging.StreamHandler(sys.stdout))
 CONSOLE.setLevel(logging.INFO)
 
-mqtt_client: MqttClient = None
-modbus_client: ModbusClient = None
-
 async def main() -> None:
     global mqtt_client
     global mqtt_config
@@ -186,6 +183,7 @@ def write(modbus_uri, modbus_address, value):
     CONSOLE.info("")
 
 def read_and_publish(modbus_uri, modbus_address, mqtt_topic, scale=1, precision=1):
+    global modbus_client
     CONSOLE.info(f"START Reading value of address '{modbus_address}'")
     modbus_host = urlparse(modbus_uri).hostname
     modbus_port = urlparse(modbus_uri).port or 1883

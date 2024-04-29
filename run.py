@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 import json
+import re
 import logging
 import os
 import random
@@ -25,58 +26,19 @@ CONSOLE: logging.Logger = logging.getLogger("console")
 CONSOLE.addHandler(logging.StreamHandler(sys.stdout))
 CONSOLE.setLevel(logging.INFO)
 
-MQTT_URI = os.getenv("MQTT_URI");
-MQTT_HOST = urlparse(MQTT_URI).hostname
-MQTT_PORT = urlparse(MQTT_URI).port or 1883
-MQTT_TOPIC = os.getenv("MQTT_TOPIC");
-MQTT_USERNAME = os.getenv("MQTT_USERNAME");
-MQTT_PASSWORD = os.getenv("MQTT_PASSWORD");
-MODBUS_URI = os.getenv("MODBUS_URI");
-MODBUS_HOST = urlparse(MODBUS_URI).hostname
-MODBUS_PORT = urlparse(MODBUS_URI).port or 502
-MODBUS_UNIT_ID = os.getenv("MODBUS_UNIT_ID");
-DEVICE_NAME = os.getenv("DEVICE_NAME");
-CLIENT_ID = f"python-mqtt-{random.randint(0, 1000)}"
-
-ENTITY_NAMES = {
-    "aussentemperatur": f"{MQTT_TOPIC}_aussentemperatur",
-    "raumtemperatur": f"{MQTT_TOPIC}_raumtemperatur",
-    "luftfeuchtigkeit": f"{MQTT_TOPIC}_luftfeuchtigkeit",
-    "betriebsart": f"{MQTT_TOPIC}_betriebsart",
-    "luftungsstufe": f"{MQTT_TOPIC}_luftungsstufe",
-    "stossluftung": f"{MQTT_TOPIC}_stossluftung",
-    "einschlaffunktion": f"{MQTT_TOPIC}_einschlaffunktion"
-}
-
-MODBUS_ADDRESSES = {
-    "aussentemperatur": 703,
-    "raumtemperatur": 700,
-    "luftfeuchtigkeit": 750,
-    "betriebsart": 550,
-    "luftungsstufe": 554,
-    "stossluftung": 551,
-    "einschlaffunktion": 559,
-};
-
-MQTT_SUBSCRIPTIONS = {
-    "betriebsart": f"homeassistant/sensor/{MQTT_TOPIC}/betriebsart/state",
-    "luftungsstufe": f"homeassistant/sensor/{MQTT_TOPIC}/luftungsstufe/state",
-    "stossluftung": f"homeassistant/binary_sensor/{MQTT_TOPIC}/stossluftung/state",
-    "einschlaffunktion": f"homeassistant/binary_sensor/{MQTT_TOPIC}/einschlaffunktion/state"
-}
-
 mqtt_client: MqttClient = None
 modbus_client: ModbusClient = None
 
 async def main() -> None:
     global mqtt_client
+    global mqtt_config
+    global devices
 
     try:
-        print_env()
         mqtt_config, devices = deserialize("config.yaml")
         init_mqtt_client()
-        announce_sensors(devices)
-        poll_mqtt_topics()
+        announce_sensors()
+        start_polling()
         while True:
             schedule.run_pending()
             time.sleep(1)
@@ -89,47 +51,44 @@ async def main() -> None:
             mqtt_client.loop_stop()
             mqtt_client.disconnect()
 
-def print_env():
-    CONSOLE.info(f"MQTT_URI: {MQTT_URI}")
-    CONSOLE.info(f"MQTT_HOST: {MQTT_HOST}")
-    CONSOLE.info(f"MQTT_PORT: {MQTT_PORT}")
-    CONSOLE.info(f"MQTT_USERNAME: {MQTT_USERNAME}")
-    CONSOLE.info(f"MQTT_PASSWORD: {MQTT_PASSWORD}")
-    CONSOLE.info(f"MQTT_TOPIC: {MQTT_TOPIC}")
-    CONSOLE.info(f"MODBUS_URI: {MODBUS_URI}")
-    CONSOLE.info(f"MODBUS_HOST: {MODBUS_HOST}")
-    CONSOLE.info(f"MODBUS_PORT: {MODBUS_PORT}")
-    CONSOLE.info(f"MODBUS_UNIT_ID: {MODBUS_UNIT_ID}")
-    CONSOLE.info(f"CLIENT_ID: {CLIENT_ID}")
-    CONSOLE.info(f"DEVICE_NAME: {DEVICE_NAME}")
-    CONSOLE.info("")
-
 def init_mqtt_client():
     global mqtt_client
+    global mqtt_config
+    mqtt_host = urlparse(mqtt_config.host).hostname
+    mqtt_port = urlparse(mqtt_config.host).port or 1883
+    mqtt_username = mqtt_config.username;
+    mqtt_password = mqtt_config.password;
     mqtt_client = MqttClient.Client(MqttEnums.CallbackAPIVersion.VERSION2, protocol=MqttEnums.MQTTProtocolVersion.MQTTv5);
-    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+    mqtt_client.username_pw_set(mqtt_username, mqtt_password)
     mqtt_client.on_connect = on_connect_mqtt
     mqtt_client.on_disconnect = on_disconnect_mqtt
     mqtt_client.on_message = on_message_mqtt
-    mqtt_client.connect(MQTT_HOST, MQTT_PORT, properties=None)
+    mqtt_client.connect(mqtt_host, mqtt_port, properties=None)
     subscribe_mqtt_topics()
     mqtt_client.loop_start()
 
 def subscribe_mqtt_topics():
     global mqtt_client
-    for topic in MQTT_SUBSCRIPTIONS.values():
-        CONSOLE.info(f"Subscribing to topic '{topic}'")
-        mqtt_client.subscribe(topic, properties=None)
-    CONSOLE.info("")
+    global devices
+    for device in devices:
+        for component in device.components:
+            if component.access_mode == "read-write":
+                topic = f"{device.topic}/{component.type}/{device.name}/{component.topic}/state"
+                CONSOLE.info(f"Subscribing to topic '{topic}'")
+                mqtt_client.subscribe(topic, properties=None)
 
-def poll_mqtt_topics():
-    schedule.every(10).seconds.do(read_and_publish, "betriebsart", f"homeassistant/sensor/{MQTT_TOPIC}/betriebsart/state", 1, 0)
-    schedule.every(10).seconds.do(read_and_publish, "luftungsstufe", f"homeassistant/sensor/{MQTT_TOPIC}/luftungsstufe/state", 1, 0)
-    schedule.every(10).seconds.do(read_and_publish, "stossluftung", f"homeassistant/binary_sensor/{MQTT_TOPIC}/stossluftung/state", 1, 0)
-    schedule.every(10).seconds.do(read_and_publish, "einschlaffunktion", f"homeassistant/binary_sensor/{MQTT_TOPIC}/einschlaffunktion/state", 1, 0)
-    schedule.every(60).seconds.do(read_and_publish, "raumtemperatur", f"homeassistant/sensor/{MQTT_TOPIC}/raumtemperatur/state", 0.1, 1)
-    schedule.every(60).seconds.do(read_and_publish, "aussentemperatur", f"homeassistant/sensor/{MQTT_TOPIC}/aussentemperatur/state", 0.1, 1)
-    schedule.every(60).seconds.do(read_and_publish, "luftfeuchtigkeit", f"homeassistant/sensor/{MQTT_TOPIC}/luftfeuchtigkeit/state", 1, 0)
+def start_polling():
+    global devices
+    for device in devices:
+        for component in device.components:
+            schedule.every( component.poll_interval).seconds.do(
+                read_and_publish,
+                device.host,
+                component.modbus_address,
+                f"{device.topic}/{component.type}/{device.name}/{component.topic}/state",
+                component.scale,
+                component.precision
+            )
 
 def publish_mqtt(topic, value):
     global mqtt_client
@@ -139,16 +98,24 @@ def publish_mqtt(topic, value):
     mqtt_client.publish(topic, str(value), properties=properties)
 
 def on_message_mqtt(client, userdata, message):
+    global devices
     if is_own_message(message) == False:
-        value = int(message.payload.decode("utf-8"))
-        if message.topic == MQTT_SUBSCRIPTIONS.get("betriebsart"):
-            write("betriebsart", value)
-        elif message.topic == MQTT_SUBSCRIPTIONS.get("luftungsstufe"):
-            write("luftungsstufe", value)
-        elif message.topic == MQTT_SUBSCRIPTIONS.get("stossluftung"):
-            write("stossluftung", value)
-        elif message.topic == MQTT_SUBSCRIPTIONS.get("einschlaffunktion"):
-            write("einschlaffunktion", value)
+        for device in devices:
+            for component in device.components:
+                if component.access_mode == "read-write":
+                    topic = f"{device.topic}/{component.type}/{device.name}/{component.topic}/config"
+                    if topic == message.topic:
+                        value = int(message.payload.decode("utf-8"))
+                        params = parse_topic(message.topic)
+                        write(component.host, component.modbus_address, value)
+
+def parse_topic(topic):
+    pattern = r"^(?P<device_topic>[^/]+)/(?P<component_type>[^/]+)/(?P<device_name>[^/]+)/(?P<component_topic>[^/]+)/state$"
+    match = re.match(pattern, topic)
+    if match:
+        return match.groupdict()
+    else:
+        return None
 
 def is_own_message(message):
     if hasattr(message.properties, "UserProperty"):
@@ -184,15 +151,15 @@ def announce_sensor(topic: str, name: str, unique_id: str, state_topic: str, val
     CONSOLE.info("")
     mqtt_client.publish( topic, json.dumps( msg ) )
 
-def announce_sensors(devices):
-    
+def announce_sensors():
+    global devices
     for device in devices:
         for component in device.components:
             if component.access_mode == "read":
                 announce_sensor(
-                    topic=f"{device.topic}/{component.type}/{device.name}/{component.topic}/config",
-                    name=ENTITY_NAMES.get("raumtemperatur", None),
-                    unique_id=f"{DEVICE_NAME} Raumtemperatur",
+                    topic=f"{device.topic}/{component.type}/{device.unique_id}/{component.topic}/config",
+                    name=f"{device.unique_id}_{component.unique_id}",
+                    unique_id=f"{device.name} {component.name}",
                     state_topic=f"{device.topic}/{component.type}/{device.name}/{component.topic}/state",
                     value_template=None,
                     device_class=component.device_class,
@@ -200,128 +167,45 @@ def announce_sensors(devices):
                     unit_of_measurement=component.unit_of_measurement
                 )
     
-    # # Announcing Entity "raumtemperatur"
-    # announce_sensor(
-    #     topic=f"homeassistant/sensor/{MQTT_TOPIC}/raumtemperatur/config",
-    #     name=ENTITY_NAMES.get("raumtemperatur", None),
-    #     unique_id=f"{DEVICE_NAME} Raumtemperatur",
-    #     state_topic=f"homeassistant/sensor/{MQTT_TOPIC}/raumtemperatur/state",
-    #     value_template=None,
-    #     device_class="temperature",
-    #     state_class="Measurement",
-    #     unit_of_measurement="°C"
-    # )
-
-    # # Announcing Entity "aussentemperatur"
-    # announce_sensor(
-    #     topic=f"homeassistant/sensor/{MQTT_TOPIC}/aussentemperatur/config",
-    #     name=ENTITY_NAMES.get("aussentemperatur", None),
-    #     unique_id=f"{DEVICE_NAME} Aussentemperatur",
-    #     state_topic=f"homeassistant/sensor/{MQTT_TOPIC}/aussentemperatur/state",
-    #     value_template=None,
-    #     device_class="temperature",
-    #     state_class="Measurement",
-    #     unit_of_measurement="°C"
-    # )
-
-    # # Announcing Entity "luftfeuchtigkeit"
-    # announce_sensor(
-    #     topic=f"homeassistant/sensor/{MQTT_TOPIC}/luftfeuchtigkeit/config",
-    #     name=ENTITY_NAMES.get("luftfeuchtigkeit", None),
-    #     unique_id=f"{DEVICE_NAME} Luftfeuchtigkeit",
-    #     state_topic=f"homeassistant/sensor/{MQTT_TOPIC}/luftfeuchtigkeit/state",
-    #     value_template=None,
-    #     device_class="humidity",
-    #     state_class="Measurement",
-    #     unit_of_measurement="%"
-    # )
-
-    # # Announcing Entity "betriebsart"
-    # announce_sensor(
-    #     topic=f"homeassistant/sensor/{MQTT_TOPIC}/betriebsart/config",
-    #     name=ENTITY_NAMES.get("betriebsart", None),
-    #     unique_id=f"{DEVICE_NAME} Betriebsart",
-    #     state_topic=f"homeassistant/sensor/{MQTT_TOPIC}/betriebsart/state",
-    #     value_template=None,
-    #     device_class=None,
-    #     state_class=None,
-    #     unit_of_measurement=None
-    # )
-
-    # # Announcing Entity "luftungsstufe"
-    # announce_sensor(
-    #     topic=f"homeassistant/sensor/{MQTT_TOPIC}/luftungsstufe/config",
-    #     name=ENTITY_NAMES.get("luftungsstufe", None),
-    #     unique_id=f"{DEVICE_NAME} Luftungsstufe",
-    #     state_topic=f"homeassistant/sensor/{MQTT_TOPIC}/luftungsstufe/state",
-    #     value_template=None,
-    #     device_class=None,
-    #     state_class=None,
-    #     unit_of_measurement=None
-    # )
-
-    # # Announcing Entity "stossluftung"
-    # announce_sensor(
-    #     topic=f"homeassistant/binary_sensor/{MQTT_TOPIC}/stossluftung/config",
-    #     name=ENTITY_NAMES.get("stossluftung", None),
-    #     unique_id=f"{DEVICE_NAME} Stossluftung",
-    #     state_topic=f"homeassistant/binary_sensor/{MQTT_TOPIC}/stossluftung/state",
-    #     value_template=None,
-    #     device_class=None,
-    #     state_class=None,
-    #     unit_of_measurement=None
-    # )
-
-    # # Announcing Entity "einschlaffunktion"
-    # announce_sensor(
-    #     topic=f"homeassistant/binary_sensor/{MQTT_TOPIC}/einschlaffunktion/config",
-    #     name=ENTITY_NAMES.get("einschlaffunktion", None),
-    #     unique_id=f"{DEVICE_NAME} Einschlaffunktion",
-    #     state_topic=f"homeassistant/binary_sensor/{MQTT_TOPIC}/einschlaffunktion/state",
-    #     value_template=None,
-    #     device_class=None,
-    #     state_class=None,
-    #     unit_of_measurement=None
-    # )
-
-def write(address, value):
+def write(modbus_uri, modbus_address, value):
     global mqtt_client
-    CONSOLE.info(f"START Writing value '{value}' to address '{address}'")
-    modbus_client = ModbusClient(MODBUS_HOST, port=MODBUS_PORT)
+    CONSOLE.info(f"START Writing value '{value}' to address '{modbus_address}'")
+    modbus_host = urlparse(modbus_uri).hostname
+    modbus_port = urlparse(modbus_uri).port or 1883
+    modbus_client = ModbusClient(modbus_host, port=modbus_port)
     if modbus_client.connect() == True:
         try:
-            # buffer = BinaryPayloadBuilder(endian=Endian.Big)
-            # buffer.add_16bit_int(0)  # Placeholder for the first byte
-            # buffer.add_16bit_int(value)
-            modbus_client.write_registers(MODBUS_ADDRESSES.get(address), value)
+            modbus_client.write_registers(modbus_address, value)
         except Exception as e:
-            print(f"Error writing value to address {address}: {e}")
+            print(f"Error writing value to address {modbus_address}: {e}")
         finally:
             modbus_client.close()
             modbus_client = None
     time.sleep(1)
-    CONSOLE.info(f"END Writing value '{value}' to address '{address}'")
+    CONSOLE.info(f"END Writing value '{value}' to address '{modbus_address}'")
     CONSOLE.info("")
 
-def read_and_publish(address, topic, scale=1, precision=1):
-    CONSOLE.info(f"START Reading value of '{address}'")
-    modbus_client = ModbusClient(MODBUS_HOST, port=MODBUS_PORT)
+def read_and_publish(modbus_uri, modbus_address, mqtt_topic, scale=1, precision=1):
+    CONSOLE.info(f"START Reading value of address '{modbus_address}'")
+    modbus_host = urlparse(modbus_uri).hostname
+    modbus_port = urlparse(modbus_uri).port or 1883
+    modbus_client = ModbusClient(modbus_host, port=modbus_port)
     if modbus_client.connect() == True:
         try:
-            result = modbus_client.read_holding_registers(MODBUS_ADDRESSES.get(address), 1)
+            result = modbus_client.read_holding_registers(modbus_address, 1)
             if result.isError():
-                CONSOLE.error(f"Error reading value from address {address}: {result}")
+                CONSOLE.error(f"Error reading value from address '{modbus_address}': {result}")
             else:
                 value = result.registers[0]
                 scaled_value = round(value * scale, precision)
-                publish_mqtt(topic, scaled_value)
+                publish_mqtt(mqtt_topic, scaled_value)
         except Exception as e:
-            print(f"Error reading and publishing value from address {address}: {e}")
+            print(f"Error reading and publishing value from address '{modbus_address}': {e}")
         finally:
             modbus_client.close()
             modbus_client = None
     time.sleep(1)
-    CONSOLE.info(f"END Reading value of '{address}'")
+    CONSOLE.info(f"END Reading value of '{modbus_address}'")
     CONSOLE.info("")
 
 def sigterm_handler(signal, frame):

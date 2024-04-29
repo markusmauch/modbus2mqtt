@@ -11,31 +11,42 @@ class MQTTConfig:
         return cls(**yaml_data)
 
 class Component:
-    def __init__(self, type, unique_id, topic=None, device_class=None, state_class=None, unit_of_measurement=None, access_mode=None, modbus_address=None):
+    def __init__(self, type, name, unique_id, topic=None, device_class=None, state_class=None, unit_of_measurement=None, access_mode=None, modbus_address=None, poll_interval=60, scale=1, precision=1):
         self.type = type
         self.unique_id = unique_id
+        self.name = name
         self.topic = topic
         self.device_class = device_class
         self.state_class = state_class
         self.unit_of_measurement = unit_of_measurement
         self.access_mode = access_mode
         self.modbus_address = modbus_address
+        self.poll_interval = poll_interval
+        self.scale = scale
+        self.precision = precision
 
     @classmethod
     def from_yaml(cls, yaml_data):
         return cls(**yaml_data)
 
 class Device:
-    def __init__(self, name, topic, components):
+    def __init__(self, name, unique_id, topic, host, unit_id, components):
         self.name = name
+        self.unique_id = unique_id;
         self.topic = topic
+        self.host = host
+        self.unit_id = unit_id
         self.components = components
 
     @classmethod
     def from_yaml(cls, yaml_data):
         name = yaml_data.get('name')
+        unique_id = yaml_data.get('unique_id')
+        topic = yaml_data.get('topic')
+        host = yaml_data.get('host')
+        unit_id = yaml_data.get('unit_id')
         components = [Component.from_yaml(component_data) for component_data in yaml_data.get('components', [])]
-        return cls(name, yaml_data.get('topic'), components)
+        return cls(name, unique_id, topic,host, unit_id, components)
 
 def deserialize(file_path):
     try:
@@ -53,28 +64,3 @@ def deserialize(file_path):
 
 file_path = 'config.yaml'
 mqtt_config, devices = deserialize(file_path)
-
-if mqtt_config:
-    # Print MQTT config
-    print("MQTT Config:")
-    print("Host:", mqtt_config.host)
-    print("Username:", mqtt_config.username)
-    print("Password:", mqtt_config.password)
-
-if devices:
-    # Print devices
-    print("\nDevices:")
-    for device in devices:
-        print("Device Name:", device.name)
-        print("Device Topic:", device.topic)
-        print("Components:")
-        for component in device.components:
-            print("  Type:", component.type)
-            print("  Unique ID:", component.unique_id)
-            print("  Topic:", component.topic)
-            print("  Device Class:", component.device_class)
-            print("  State Class:", component.state_class)
-            print("  Unit of Measurement:", component.unit_of_measurement)
-            print("  Access Mode:", component.access_mode)
-            print("  Modbus Address:", component.modbus_address)
-            print()

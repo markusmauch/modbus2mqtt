@@ -1,0 +1,5 @@
+schedule
+pymodbus
+paho-mqtt
+pyyaml
+debugpy

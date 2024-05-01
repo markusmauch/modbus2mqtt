@@ -8,7 +8,15 @@
             "name": "Run",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/run.py",
+            "program": "${workspaceFolder}/service.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "name": "Serve",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/serve.py",
             "console": "integratedTerminal",
             "envFile": "${workspaceFolder}/.env"
         }

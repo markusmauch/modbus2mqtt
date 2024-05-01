@@ -27,16 +27,22 @@ CONSOLE.addHandler(logging.StreamHandler(sys.stdout))
 CONSOLE.setLevel(logging.INFO)
 
 async def main() -> None:
+    start()
+
+loop = False
+
+def start():
     global mqtt_client
     global mqtt_config
     global devices
 
     try:
-        mqtt_config, devices = deserialize("config.yaml")
+        mqtt_config, devices = deserialize("config.json")
         init_mqtt_client()
         announce_sensors()
         start_polling()
-        while True:
+        loop = True
+        while loop == True:
             schedule.run_pending()
             time.sleep(1)
 
@@ -47,6 +53,18 @@ async def main() -> None:
         if mqtt_client != None and mqtt_client.is_connected():
             mqtt_client.loop_stop()
             mqtt_client.disconnect()
+
+def stop():
+    global mqtt_client
+    global mqtt_config
+    global devices
+    CONSOLE.info("Received SIGTERM. Exiting gracefully.")
+    loop = False
+    schedule.clear()
+    if modbus_client != None and modbus_client.connected:
+        modbus_client.close()
+    if mqtt_client != None:
+        mqtt_client.disconnect();
 
 def init_mqtt_client():
     global mqtt_client
@@ -127,10 +145,10 @@ def on_connect_mqtt(client, userdata, flags, reason_code, properties):
         print("Connected to MQTT Broker!")
     else:
         print("Failed to connect, return code %d\n", reason_code)
-        terminate()
+        stop()
 
 def on_disconnect_mqtt(client, userdata, flags, reason_code, properties):
-    terminate()
+    stop()
 
 def announce_sensor(topic: str, name: str, unique_id: str, state_topic: str, value_template: str, device_class = None, state_class = None, unit_of_measurement: str = None, json_attributes_topic = None ):
     global mqtt_client
@@ -207,16 +225,8 @@ def read_and_publish(modbus_uri, modbus_address, mqtt_topic, scale=1, precision=
     CONSOLE.info("")
 
 def sigterm_handler(signal, frame):
-    terminate()
+    stop()
     
-def terminate():
-    CONSOLE.info("Received SIGTERM. Exiting gracefully.")
-    if modbus_client != None and modbus_client.connected:
-        modbus_client.close()
-    if mqtt_client != None:
-        mqtt_client.disconnect();
-    sys.exit(0)
-
 # run async main
 if __name__ == "__main__":
     try:

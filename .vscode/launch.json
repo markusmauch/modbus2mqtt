@@ -8,17 +8,15 @@
             "name": "Run",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/service.py",
-            "console": "integratedTerminal",
-            "envFile": "${workspaceFolder}/.env"
+            "program": "${workspaceFolder}/src/run.py",
+            "console": "integratedTerminal"
         },
         {
-            "name": "Serve",
+            "name": "Modbus2Mqtt",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/serve.py",
-            "console": "integratedTerminal",
-            "envFile": "${workspaceFolder}/.env"
+            "program": "${workspaceFolder}/src/modbus2mqtt.py",
+            "console": "integratedTerminal"
         }
     ]
 }
